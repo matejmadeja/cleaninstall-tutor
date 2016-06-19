@@ -1,0 +1,7 @@
+---
+- name: Example playbook
+  hosts: machines
+  become: true
+  roles:
+    - example
+    

@@ -1,0 +1,22 @@
+---
+servers:
+  # -------------------------------- Debian 9 Stretch -------------------------------- #
+  debian-testing:
+    image: sharlak/debian_stretch_64
+    memory: 512
+    cpus: 2
+    opened_ports:
+      - port: 22
+        protocol: tcp
+      - port: 80
+        protocol: tcp
+  # -------------------------------- Fedora 23 --------------------------------------- #
+  fedora:
+    image: box-cutter/fedora23
+    memory: 512
+    cpus: 2
+    opened_ports:
+      - port: 22
+        protocol: tcp
+      - port: 80
+        protocol: tcp

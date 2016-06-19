@@ -1,0 +1,8 @@
+---
+- name: "Getting username"
+  command: whoami
+  changed_when: False
+  register: logged_user
+
+- name: "Including general vars to OS distibution"
+  include_vars: "{{ ansible_distribution }}.yml"
