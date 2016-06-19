@@ -1,0 +1,13 @@
+bootstrap_locale_path: /etc/default/locale
+
+bootstrap_packages_dist_special:
+  - cronie # like cron
+  - cronie-anacron
+  - bind-utils # like dnsutils
+  - nc # like netcat
+  - facter  
+
+bootstrap_locales_redhat:
+  - { i: 'en_US', f: 'UTF-8 en_US.UTF-8' } 
+
+bootstrap_alternative_editor: '/usr/bin/nano'

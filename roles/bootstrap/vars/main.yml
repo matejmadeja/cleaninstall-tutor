@@ -1,0 +1,45 @@
+bootstrap_packages:
+  - sudo
+  - cpanminus
+  - curl
+  - gawk
+  - gnupg
+  - git
+  - hdparm
+  - htop
+  - hping3
+  - iotop
+  - iptraf-ng
+  - lynx
+  - make
+  - most
+  - mutt
+  - nmap
+  - nmon
+  - pv
+  - python-pip
+  - python-pycurl
+  - python-setuptools
+  - pwgen
+  - reptyr
+  - rsyslog
+  - rsync
+  - screen
+  - strace
+  - swaks
+  - sysstat
+  - tcpdump
+  - unzip
+  - vim
+  - nano
+  - bmon
+
+bootstrap_hostname_files:
+  - /etc/exim4/update-exim4.conf
+  - /etc/printcap
+  - /etc/hostname
+  - /etc/hosts
+  - /etc/ssh/ssh_host_rsa_key.pub
+  - /etc/ssh/ssh_host_dsa_key.pub
+  - /etc/motd
+  - /etc/ssmtp/ssmtp.conf

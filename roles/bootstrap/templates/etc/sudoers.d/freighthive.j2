@@ -1,0 +1,10 @@
+#
+# {{ ansible_managed }}
+# FREIGHTHIVE
+
+{% for i in bootstrap_users %}
+{% if i.sudo is defined and i.sudo %}
+{{ i.name }} ALL=(ALL) NOPASSWD: ALL
+{% endif %}
+{% endfor %}
+

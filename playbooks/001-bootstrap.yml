@@ -1,0 +1,25 @@
+---
+- name: Linux initial configuration
+  hosts: machines
+  become: true
+  vars_prompt:
+    - name: "dist_upgrade_confirmed"
+      prompt: "Do you wish to upgrade your system during the installation? System upgrade is performed just once. Fedora will not-upgrade!!! (yes/no)"
+      private: no
+  pre_tasks:
+    - name: "Unifying answers"
+      set_fact:
+        dist_upgrade_confirmed: "{{ true if dist_upgrade_confirmed == 'yes' or dist_upgrade_confirmed == 'y' or dist_upgrade_confirmed == '' else false }}"
+  vars:
+    kernel_parameters: "cgroup_enable=memory swapaccount=1"
+    bootstrap_users:
+      - name: user
+        become: true
+        createhome: true
+        ssh_keys: []
+    zsh_users:
+      - root
+      - user
+  roles:
+    - bootstrap
+    

@@ -1,0 +1,59 @@
+---
+- name: restart openntpd
+  service: name=openntpd state=restarted
+
+- name: restart rsyslog
+  service: name=rsyslog state=restarted
+
+- name: locale-gen
+  command: locale-gen 
+
+- name: restart instance
+  shell: sleep 2 && shutdown -r now "Ansible updates triggered"
+  async: 1
+  poll: 0
+  become: true
+  ignore_errors: true
+  notify:
+    - wait for server
+
+- name: wait for server
+  become: no
+  wait_for:
+    host: "{{ ansible_host }}"
+    port: "{{ ansible_port }}"
+    search_regex: OpenSSH
+    delay: 20
+    timeout: 800
+    state: started
+  delegate_to: localhost
+
+# -------------------- Debian Family -------------------- #
+- name: restart ntp
+  service: name=ntp state=restarted
+  when: ansible_distribution == "Debian"
+
+- name: restart cron
+  service: name=cron state=restarted
+  when: ansible_distribution == "Debian"
+
+- name: reload networking
+  service: name=networking state=reloaded
+  when: ansible_distribution == "Debian"
+
+- name: update tzdata
+  command: dpkg-reconfigure -f noninteractive tzdata 
+  when: ansible_os_family == 'Debian'
+
+# -------------------- RedHat Family -------------------- #
+- name: restart ntp
+  service: name=ntpd state=restarted
+  when: ansible_distribution == "RedHat"
+
+- name: restart cron
+  service: name=crond state=restarted
+  when: ansible_distribution == "RedHat"
+
+- name: reload networking
+  service: name=network state=reloaded
+  when: ansible_os_family == "RedHat"

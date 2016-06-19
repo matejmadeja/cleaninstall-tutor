@@ -1,0 +1,8 @@
+---
+- name: Linux cmd line packages install
+  hosts: machines
+  become: true
+  roles:
+    - cmd-pkgs
+    - docker
+    

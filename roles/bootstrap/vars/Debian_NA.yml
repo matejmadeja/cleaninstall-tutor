@@ -1,0 +1,5 @@
+bootstrap_apt_default_release: "stretch"
+
+boostrap_apt_priority_stable: 400
+boostrap_apt_priority_testing: 900
+boostrap_apt_priority_unstable: 50

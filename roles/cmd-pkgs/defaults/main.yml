@@ -1,0 +1,10 @@
+# -------------------------
+# APT configuration
+# -------------------------
+# See: http://http.debian.net/
+#bootstrap_apt_mirror: http://httpredir.debian.org/debian
+#bootstrap_apt_security_mirror: http://security.debian.org/
+#bootstrap_apt_default_release: "jessie"
+#bootstrap_apt_default_host: "httpredir.debian.org"
+#bootstrap_apt_use_src: false
+#bootstrap_apt_components: "main contrib non-free"

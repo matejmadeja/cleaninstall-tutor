@@ -1,0 +1,38 @@
+---
+# - name: "Including vars related to OS version ({{ ansible_distribution_release }} {{ansible_distribution}} {{ansible_os_family}})"
+#   include_vars: "{{ ansible_distribution }}_{{ ansible_distribution_release }}.yml"
+
+- name: "Checking python-setuptools existence?"
+  stat: path=/usr/bin/easy_install
+  register: easy_install
+
+- name: "Installing python-setuptools (Debian)"
+  apt:
+    name: "python-setuptools"
+    state: present
+    update_cache: yes
+    force: yes
+  when: ansible_os_family == 'Debian' and easy_install.stat.exists == False
+
+- name: "Installing python-setuptools (RedHat)"
+  package:
+    name: "python-setuptools"
+    state: present
+  when: ansible_os_family == 'RedHat' and ansible_distribution != 'Fedora' and easy_install.stat.exists == False # problem intalling on Fedora - python utils var not set on VM
+
+- name: 'Installing PIPs'
+  easy_install: 
+    name=pip 
+    state=present
+
+- name: 'Installing PIP dependencies'
+  pip:
+    name: docker-py
+    state: present
+
+- name: 'Installing apt-transport-https' # install just for debian-children branch
+  apt: name=apt-transport-https state=present
+  when: ansible_os_family == 'Debian'
+
+- name: 'Installing ca-certificates'
+  package: name=ca-certificates state=present

@@ -1,0 +1,160 @@
+---
+- name: "Including vars related to OS version ({{ ansible_distribution_release }} {{ansible_distribution}} {{ansible_os_family}})"
+  include_vars: "{{ ansible_distribution }}_{{ ansible_distribution_release }}.yml"
+
+- name: "Checking docker existence?"
+  stat: path=/usr/bin/docker
+  register: docker_bin
+
+- block: # only if docker does not exist
+  - name: 'Installing apt-transport-https' # install just for debian-children branch
+    apt: name=apt-transport-https state=present
+    when: ansible_os_family == 'Debian'
+
+  - name: 'Installing ca-certificates'
+    package: name=ca-certificates state=present
+
+  # -------------------------- DEBIAN BRANCH ----------------------------------- #
+  - block: # for Debian branch
+    - name: 'Adding APT key'
+      apt_key:
+        id: "58118E89F3A912897C070ADBF76221572C52609D"
+        keyserver: "hkp://p80.pool.sks-keyservers.net:80"
+      retries: 5
+      delay: 10
+
+    - name: 'Adding APT repository'
+      apt_repository:
+        repo: "{{ docker_apt_repo }}"
+        update_cache: yes
+      when: docker_bin.stat.exists == False
+
+    # Docker install for Debian branch
+    - name: "Installing Docker ({{ docker_package }}={{ docker_version }}-*)"
+      package:
+        name: "{{ docker_package }}={{ docker_version }}-*"
+        state: present
+        force: yes
+      notify:
+        - restart docker
+
+    - name: "Locking {{ docker_package }} package version (Debian)"
+      command: "apt-mark hold {{ docker_package }}"
+      args:
+        warn: false
+    when: ansible_os_family == 'Debian'
+
+  # ------------------------- REDHAT BRANCH -------------------------- #
+
+  - block: # RedHat branch
+    - name: "Adding YUM repository"
+      copy: 
+        src: "{{ansible_distribution}}_docker.repo" 
+        dest: "/etc/yum.repos.d/docker.repo"
+        force: yes
+
+    # Installing yum module, RedHat branch
+    - name: "Installing yum module (RedHat Fedora)"
+      dnf: 
+        name: "yum" 
+        state: present
+      when: ansible_distribution == 'Fedora'
+
+    # Docker install for RedHat branch
+    - name: "Installing Docker ({{ docker_package }}-{{ docker_version }})"
+      yum: 
+        name: "{{ docker_package }}-{{ docker_version }}" 
+        state: present
+      notify:
+        - restart docker
+
+    - name: "Installing yum-versionlock (RedHat CentOS)"
+      yum:
+        name: yum-versionlock
+        state: present
+      when: ansible_distribution == 'CentOS'
+
+    - name: "Locking {{ docker_package }} package version (RedHat CentOS)"
+      command: "yum versionlock {{ docker_package }}"
+      args:
+        warn: false
+      when: ansible_distribution == 'CentOS'
+
+    - name: "Installing dnf-command(versionlock) (RedHat Fedora)"
+      dnf:
+        name: 'dnf-command(versionlock)'
+        state: present
+      when: ansible_distribution == 'Fedora'
+
+    - name: "Locking {{ docker_package }} package version (RedHat Fedora)"
+      command: "dnf versionlock add {{ docker_package }}"
+      args:
+        warn: false
+      when: ansible_distribution == 'Fedora'
+    when: ansible_os_family == 'RedHat'
+  when: docker_bin.stat.exists == False
+
+# ------------------------- GENERAL INSTALL -------------------------- #
+
+- name: "Getting username"
+  command: whoami
+  become: false
+  changed_when: False
+  register: logged_user
+
+- name: "Getting user groups"
+  command: "groups {{ logged_user.stdout }}" 
+  register: logged_user_groups
+  changed_when: False
+
+- name: "Adding user {{ logged_user.stdout }} to docker group"
+  command: "usermod -aG docker {{ logged_user.stdout }}"
+  when: logged_user_groups.stdout.find('docker') == -1
+
+- name: "Checking docker-squash existence"
+  stat: path=/usr/local/bin/docker-squash
+  register: docker_squash_bin
+
+- name: "Get docker-squash version"
+  command: /usr/local/bin/docker-squash -v
+  changed_when: False
+  register: docker_squash_actual_version
+  when: docker_squash_bin.stat.exists == True
+
+- name: "Compare docker-squash version"
+  set_fact:
+    docker_squash_install: True
+  when: docker_squash_bin.stat.exists == False or docker_squash_actual_version.stdout != docker_squash_version
+
+- block:
+    - name: "Downloading docker-squash"
+      get_url: 
+        url: "https://github.com/jwilder/docker-squash/releases/download/{{ docker_squash_version }}/docker-squash-linux-amd64-{{ docker_squash_version }}.tar.gz"
+        dest: /tmp/docker-squash.tar.gz
+
+    - name: "Installing docker-squash"
+      unarchive: src=/tmp/docker-squash.tar.gz dest=/usr/local/bin copy=no
+
+    - name: "Removing tmp files"
+      file: path=/tmp/docker-squash.tar.gz state=absent
+
+  when: docker_squash_install is defined
+
+- name: "Installing docker-compose"
+  pip:
+    name: docker-compose
+    version: "{{ docker_compose_version if docker_compose_version else omit }}"
+    state: present
+
+- name: "Installing docker-scripts"
+  pip:
+    name: docker-scripts
+    version: "{{ docker_scripts_version if docker_scripts_version else omit }}"
+    state: present
+
+- name: "Installing docker-clean"
+  copy:
+    src: "bin/docker-clean"
+    dest: "/usr/bin/"
+    mode: "0755"
+  become: true

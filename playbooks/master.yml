@@ -1,2 +1,3 @@
 ---
-- include: 001-example.yml
+- include: 001-bootstrap.yml
+- include: 002-base-pkgs.yml

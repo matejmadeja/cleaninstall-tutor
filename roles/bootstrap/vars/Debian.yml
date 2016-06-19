@@ -1,0 +1,49 @@
+#
+# Priorities for APT repositories
+#
+# -------------------------
+# APT configuration
+# -------------------------
+# See: http://http.debian.net/
+bootstrap_apt_mirror: http://httpredir.debian.org/debian
+bootstrap_apt_security_mirror: http://security.debian.org/
+bootstrap_apt_default_host: "httpredir.debian.org"
+bootstrap_apt_use_src: false
+bootstrap_apt_components: "main contrib non-free"
+
+
+boostrap_apt_priority_stable: 900
+boostrap_apt_priority_testing: 400
+boostrap_apt_priority_unstable: 50
+
+boostrap_apt_repos:
+  stable:
+    - "deb {{ bootstrap_apt_mirror }} jessie main"
+    - "deb-src {{ bootstrap_apt_mirror }} jessie main"
+    - "deb {{ bootstrap_apt_mirror }} jessie-backports main"
+  testing:
+    - "deb {{ bootstrap_apt_mirror }} stretch main"
+    - "deb-src {{ bootstrap_apt_mirror }} stretch main"
+  unstable:
+    - "deb {{ bootstrap_apt_mirror }} sid main"
+    - "deb-src {{ bootstrap_apt_mirror }} sid main"
+  security:
+    - "deb {{ bootstrap_apt_security_mirror }} jessie/updates main"
+    - "deb-src {{ bootstrap_apt_security_mirror }} jessie/updates main"
+    - "deb {{ bootstrap_apt_security_mirror }} stretch/updates main"
+    - "deb-src {{ bootstrap_apt_security_mirror }} stretch/updates main"
+boostrap_apt_preferences:
+  stable: "{{ boostrap_apt_priority_stable }}"
+  testing: "{{ boostrap_apt_priority_testing }}"
+  unstable: "{{ boostrap_apt_priority_unstable }}"
+
+bootstrap_packages_dist_special:
+  - apt-transport-https
+  - cron
+  - cron-apt
+  - debian-goodies
+  - debconf-utils
+  - dnsutils
+  - netcat
+  - ohai
+  

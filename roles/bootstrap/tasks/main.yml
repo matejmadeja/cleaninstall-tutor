@@ -1,0 +1,300 @@
+---
+- name: "Including general vars to OS distibution ({{ansible_distribution}})"
+  include_vars: "{{ ansible_distribution }}.yml"
+
+- name: "Including vars related to OS version ({{ ansible_distribution_release }} Family, {{ansible_distribution}}, {{ansible_os_family}})"
+  include_vars: "{{ ansible_distribution }}_{{ ansible_distribution_release }}.yml"
+
+# A helpful reminder of what to look out for post-update.
+- name: "Make sure org.foo.FooOverload exception is not present. Press ctrl+C and 'C' to continue. Installation will continue after 1 minutes automatically."
+  pause: 
+    minutes: 1
+
+- name: "Creating ansible facts.d"
+  file: 
+    path: /etc/ansible/facts.d
+    state: directory
+  register: facts_d
+
+- debug: var=facts_d
+
+- name: "Adding groups to the system"
+  group: 
+    name: "{{ item.name }}"
+    system: "{{ item.system | default('no') }}"
+  with_items: "{{ bootstrap_groups  }}"
+  when: item.state is not defined or item.state == 'present'
+
+- name: "Adding users to the system"
+  no_log: True
+  user: 
+    name: "{{ item.name }}"
+    comment: "{{ item.comment | default('') }}"
+    groups: "{{ item.groups | default('') }}"
+    home: "{{ item.home | default('/home/' + item.name) }}"
+    createhome: "{{ item.createhome | default('yes') }}"
+    system: "{{ item.system | default('no') }}"
+    state: "{{ item.state | default('present') }}"
+    append: yes
+  with_items: "{{ bootstrap_users }}"
+  register: u
+
+- name: "Deleting groups from the system"
+  group: 
+    name: "{{ item.name }}"
+    state: absent
+  with_items: "{{ bootstrap_groups }}"
+  when: item.state is defined and item.state == 'absent'
+
+- name: "Adding user(s) to group(s)"
+  no_log: True
+  user: 
+    name: "{{ item.name }}"
+    group: "{{ item.group }}"
+  with_items: "{{ bootstrap_users }}"
+  when: item.group is defined and (item.state is not defined or item.state == 'present')
+
+- name: "Installing SSH public key to system users"
+  no_log: True
+  authorized_key: 
+    user: "{{ item.0.name }}" 
+    key: "{{ item.1 }}"
+  with_subelements:
+    - "{{ bootstrap_users }}"
+    - ssh_keys
+  when: item.0.state is not defined or item.0.state == 'present'
+
+- name: "Creating sudoers file"
+  template:
+    src: etc/sudoers.d/freighthive.j2
+    dest: /etc/sudoers.d/freighthive
+    mode: 0440
+    validate: 'visudo -cf %s'
+  when: u.changed
+
+# -------------------------- DEBIAN FAMILY ----------------------------------- #
+- block:
+  # --------- DEBIAN ------- #
+  - block:
+    - name: "[Debian] Move default sources.list --> sources.list.bak"
+      command: mv /etc/apt/sources.list /etc/apt/sources.list.bak
+      args:
+        removes: /etc/apt/sources.list
+
+    - name: "[Debian] Configuring APT sources lists"
+      copy: 
+        content: "{{ item.value | join('\n') }}\n"
+        dest: "/etc/apt/sources.list.d/{{ item.key }}.list"
+      with_dict: "{{ boostrap_apt_repos }}"
+
+    - name: "[Debian] Configuring APT sources preferences"
+      copy: 
+        content: "Package: *\nPin: release a={{ item.key }}\nPin-Priority: {{ item.value }}\n"
+        dest: "/etc/apt/preferences.d/{{ item.key }}.pref"
+      with_dict: "{{ boostrap_apt_preferences }}"
+
+    - name: "[Debian] Configuring APT default release"
+      copy:
+        content:  "APT::Default-Release \"{{ bootstrap_apt_default_release }}\";"
+        dest: /etc/apt/apt.conf.d/90defaultrelease
+
+    - name: "[Debian] Configuring APT security preference"
+      copy: 
+        content: "Package: *\nPin: release l=Debian-Security\nPin-Priority: 1000\n"
+        dest: "/etc/apt/preferences.d/security.pref"
+
+    - name: "[Debian] Configuring APT noextrapackages"
+      copy: 
+        src: etc/apt/apt.conf.d/90noextrapackages
+        dest: /etc/apt/apt.conf.d/90noextrapackages
+
+    - name: "[Debian] Updating apt cache"
+      apt: 
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: "[Debian] Installing python-pip (from unstable)"
+      apt: 
+        name: python-pip=8.*
+        default_release: unstable
+        state: present
+    when: ansible_distribution == 'Debian'
+
+  # --------- UBUNTU ------- #
+  - block:
+    - name: "[Ubuntu] Installing python-pip"
+      easy_install: 
+        name: pip
+        state: present
+    when: ansible_distribution == 'Ubuntu'
+
+  # --------- GENERAL DEBIAN FAMILY ------- #
+  - name: "[Debian Family] Updating apt cache"
+    apt: 
+      update_cache: yes
+      cache_valid_time: 3600
+
+  - name: "[Debian Family] Installing Aptitude"
+    apt: 
+      name: aptitude
+      state: present
+
+  - name: "[Debian Family] Upgrading system"
+    apt: 
+      upgrade: safe
+      force: yes
+    ignore_errors: yes
+    retries: 24
+    delay: 5
+    when: dist_upgrade_confirmed == true
+  when: ansible_os_family == 'Debian'
+
+- block:
+  # ------- fedora upgrade removed for unstable installation ---------------- #
+  # - block:
+  #   - name: "[Fedora] Installing fedora-upgrade"
+  #     package: 
+  #       name: fedora-upgrade
+  #       state: present
+
+  #   - name: "[Fedora] Upgrading system"
+  #     shell: "yes '' | yes '' | fedora-upgrade"
+  #     become: true
+  #   when: dist_upgrade_confirmed == true
+
+  - name: "[Fedora] Upgrade all packages"
+    dnf: 
+      name: "*"
+      state: latest
+  when: ansible_distribution == 'Fedora'
+
+# -------------------------- ALL FAMILIES ----------------------------------- #
+
+- name: "[CentOS] Adding yum repos"
+  yum: 
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - "{{ bootstrp_yum_add_repos }}"
+  when: ansible_distribution == 'CentOS'
+
+
+- name: Installing base packages
+  package: 
+    name: "{{ item }}"
+    state: present
+  with_flattened:
+    - "{{ bootstrap_packages_dist_special }}"
+    - "{{ bootstrap_packages }}"
+
+# -------------------------- removed for changing - probably unnessesary -------------------------------------#
+# - name: "Setting /etc/localtime to {{ bootstrap_timezone }}"
+#   copy: 
+#     src: "/usr/share/zoneinfo/{{ bootstrap_timezone }}"
+#     dest: /etc/localtime
+#     owner: root
+#     group: root
+#     mode: 0644
+#   notify: 
+#     - update tzdata
+#     - restart cron
+
+- name: "Setting default timezone {{ bootstrap_timezone }}"
+  copy:
+    content: "{{ bootstrap_timezone }}\n"
+    dest: /etc/timezone
+    owner: root
+    group: root
+    mode: 0644
+  notify: 
+    - update tzdata
+    - restart cron
+
+- name: "[Debian] Adding locale"
+  locale_gen: 
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ bootstrap_locales }}"
+  when: ansible_os_family == 'Debian'
+
+- name: "[RedHat] Adding locale"
+  command: localedef -c -i en_US -f UTF-8 en_US.UTF-8
+  changed_when: false
+  when: ansible_os_family == 'RedHat'
+
+- name: Deploying default locale
+  template: 
+    src: etc/default/locale.j2
+    dest: /etc/default/locale
+
+- name: "Setting {{ bootstrap_locale_path }}"
+  locale_gen: 
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ bootstrap_locales }}"
+  notify: 
+   - locale-gen
+  when: ansible_os_family == 'Debian'
+
+- name: "Validating NTP package"
+  assert:
+    that: 'bootstrap_ntp_pkg == "openntpd" or bootstrap_ntp_pkg == "ntp"'
+
+- name: "Installing NTP daemon"
+  package: 
+    name: "{{ bootstrap_ntp_pkg }}"
+    state: present
+
+- name: "Deploying OpenNTPd configuration file"
+  template: 
+    src: etc/openntpd/ntpd.conf.j2
+    dest: /etc/openntpd/ntpd.conf
+  when: bootstrap_ntp_pkg == 'openntpd'
+  notify: 
+    - restart openntpd
+
+- name: "Deploying NTPd configuration file"
+  template:
+    src: etc/ntp.conf.j2
+    dest: /etc/ntp.conf
+  when: bootstrap_ntp_pkg == 'ntp'
+  notify: 
+    - restart ntp
+
+# ----------------------- Debian Family setting editor ----------------------- #
+- name: "[Debian Family] Setting default text editor"
+  alternatives: 
+    name: editor
+    path: "{{ bootstrap_alternative_editor }}"
+  when: ansible_os_family == 'Debian'
+
+# ----------------------- RedHat Family setting editor ----------------------- #
+- name: "[RedHat Family] Setting default text editor"
+  shell: "alternatives --install /usr/bin/editor editor {{ bootstrap_alternative_editor }} 100"
+  become: true
+  changed_when: false
+  when: ansible_os_family == 'RedHat'
+
+- name: "Setting dotfiles for root"
+  copy: 
+    src: "{{ item }}" 
+    dest: "/root/.{{ item }}"
+    force: no
+  with_items:
+    - bashrc
+    - vimrc
+    - screenrc
+    - gitconfig
+  when: '{{ bootstrap_use_dotfiles }}'
+
+- name: "Sysctl tuning"
+  sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/ansible.conf
+    state: present
+  no_log: True
+  with_items: "{{ bootstrap_sysctl_config }}"
+
+
+
